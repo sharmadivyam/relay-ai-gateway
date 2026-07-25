@@ -1,36 +1,19 @@
 """
 LLM Router — Universal LLMProvider adapter.
 
-WORK LAPTOP NOTE (see MIGRATION_GUIDE.md):
-  litellm cannot be installed because it requires Rust (maturin) and rustup
-  download fails due to corporate SSL certificate inspection.
-  The LLMProvider class below is backed by the openai SDK for now.
-  Every provider-specific block is dual-tracked with comments:
+Backed by litellm, which is provider-agnostic by model string (e.g.
+"gpt-4o-mini", "gemini/gemini-1.5-flash", "llama-3.3-70b" via Cerebras).
+No per-provider client factory is needed — litellm handles endpoint
+resolution, auth, and transport (including TLS) internally.
 
-    # OPENAI ONLY — delete these lines on personal laptop
-    # LITELLM     — uncomment these lines on personal laptop
-
-  The public interface (call_llm / stream_llm / LLMRouterResult) is
-  provider-agnostic. proxy.py and every other caller never need to change.
-
-Migration is a 4-step surgery inside this file only:
-  1. pip install litellm
-  2. Uncomment every # LITELLM line
-  3. Delete every # OPENAI ONLY line
-  4. Delete _make_client() helper and the openai/httpx imports
+The public interface (call_llm / stream_llm / LLMRouterResult) is
+provider-agnostic. proxy.py and every other caller never need to change.
 """
 import time
 from typing import AsyncGenerator
 
-# OPENAI ONLY — delete this import block on personal laptop
-import httpx
-from openai import AsyncOpenAI, RateLimitError, APIStatusError
-# OPENAI ONLY — end
-
-# LITELLM — uncomment on personal laptop (and delete the openai block above)
-# import litellm
-# from litellm.exceptions import RateLimitError, APIError as APIStatusError
-# LITELLM — end
+import litellm
+from litellm.exceptions import RateLimitError, APIError as APIStatusError
 
 from app.config import get_settings
 from app.db.schemas import ChatCompletionRequest
@@ -99,11 +82,7 @@ class LLMRouterResult:
 
 class LLMProvider:
     """
-    Universal LLM adapter.
-
-    Currently backed by the openai SDK (work-laptop constraint).
-    Switching to litellm on a personal laptop requires changes only inside
-    this class — see the # OPENAI ONLY / # LITELLM comment pairs.
+    Universal LLM adapter, backed by litellm.
 
     Public API (never changes regardless of backend):
       await provider.call(request)   -> LLMRouterResult
@@ -112,30 +91,6 @@ class LLMProvider:
 
     def __init__(self) -> None:
         self._settings = get_settings()
-
-    # ------------------------------------------------------------------
-    # OPENAI ONLY — delete this entire method on personal laptop
-    # (litellm is provider-agnostic by model string; no client factory needed)
-    def _make_client(self, model: str) -> "AsyncOpenAI":
-        """
-        Returns an AsyncOpenAI client pointed at the correct endpoint.
-
-        WORK LAPTOP NOTE: verify=False on httpx disables SSL cert validation,
-        required behind the corporate SSL inspection proxy.
-        Remove verify=False on a personal laptop.
-        """
-        if "gemini" in model:
-            return AsyncOpenAI(
-                api_key=self._settings.gemini_api_key or "dummy",
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                http_client=httpx.AsyncClient(verify=False),  # MIGRATION: remove verify=False
-            )
-        return AsyncOpenAI(
-            api_key=self._settings.openai_api_key or "dummy",
-            base_url=self._settings.openai_base_url,          # reads OPENAI_BASE_URL from .env
-            http_client=httpx.AsyncClient(verify=False),      # MIGRATION: remove verify=False
-        )
-    # OPENAI ONLY — end
 
     async def call(self, request: ChatCompletionRequest, model_override: str | None = None) -> LLMRouterResult:
         """
@@ -151,15 +106,10 @@ class LLMProvider:
 
         last_exc: Exception | None = None
         for idx, model in enumerate(models_to_try):
-            # Gemini's own API wants "gemini-1.5-flash" (no prefix).
-            # OpenRouter wants the full ID e.g. "meta-llama/llama-3.2-3b-instruct:free".
-            model_id = _strip_provider_prefix(model) if "gemini" in model else model
             t_start = time.perf_counter()
             try:
-                # OPENAI ONLY — delete this block on personal laptop -----------
-                client = self._make_client(model)
-                response = await client.chat.completions.create(
-                    model=model_id,
+                response = await litellm.acompletion(
+                    model=model,
                     messages=messages,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens,
@@ -170,22 +120,6 @@ class LLMProvider:
                 pt = usage.prompt_tokens if usage else 0
                 ct = usage.completion_tokens if usage else 0
                 tt = usage.total_tokens if usage else 0
-                # OPENAI ONLY — end -------------------------------------------
-
-                # LITELLM — uncomment on personal laptop (delete block above) --
-                # response = await litellm.acompletion(
-                #     model=model,
-                #     messages=messages,
-                #     temperature=request.temperature,
-                #     max_tokens=request.max_tokens,
-                # )
-                # total_latency_ms = (time.perf_counter() - t_start) * 1000
-                # usage = response.usage
-                # content = response.choices[0].message.content or ""
-                # pt = usage.prompt_tokens if usage else 0
-                # ct = usage.completion_tokens if usage else 0
-                # tt = usage.total_tokens if usage else 0
-                # LITELLM — end ------------------------------------------------
 
                 return LLMRouterResult(
                     content=content,
@@ -217,35 +151,17 @@ class LLMProvider:
         models_to_try = [self._settings.primary_model, self._settings.fallback_model]
 
         for idx, model in enumerate(models_to_try):
-            model_id = _strip_provider_prefix(model) if "gemini" in model else model
             try:
-                # OPENAI ONLY — delete this block on personal laptop -----------
-                client = self._make_client(model)
-                stream = await client.chat.completions.create(
-                    model=model_id,
+                async for chunk in await litellm.acompletion(
+                    model=model,
                     messages=messages,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens,
                     stream=True,
-                )
-                async for chunk in stream:
+                ):
                     if chunk.choices and chunk.choices[0].delta.content:
                         yield chunk.choices[0].delta.content
                 return
-                # OPENAI ONLY — end -------------------------------------------
-
-                # LITELLM — uncomment on personal laptop (delete block above) --
-                # async for chunk in await litellm.acompletion(
-                #     model=model,
-                #     messages=messages,
-                #     temperature=request.temperature,
-                #     max_tokens=request.max_tokens,
-                #     stream=True,
-                # ):
-                #     if chunk.choices and chunk.choices[0].delta.content:
-                #         yield chunk.choices[0].delta.content
-                # return
-                # LITELLM — end ------------------------------------------------
 
             except RateLimitError:
                 if idx < len(models_to_try) - 1:

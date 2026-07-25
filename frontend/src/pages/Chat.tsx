@@ -148,8 +148,16 @@ export function Chat() {
       let msg = "Something went wrong.";
       if (err instanceof ApiError) {
         try {
-          const parsed = JSON.parse(err.message) as { detail?: string };
-          msg = parsed.detail ?? err.message;
+          const parsed = JSON.parse(err.message) as {
+            detail?: string | { error?: string; reason?: string };
+          };
+          if (typeof parsed.detail === "string") {
+            msg = parsed.detail;
+          } else if (parsed.detail && typeof parsed.detail === "object") {
+            msg = parsed.detail.reason || parsed.detail.error || "Request was blocked.";
+          } else {
+            msg = err.message;
+          }
         } catch {
           msg = err.message;
         }

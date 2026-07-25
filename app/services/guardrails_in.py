@@ -41,7 +41,7 @@ PATTERN_LIBRARY: dict[str, list[re.Pattern]] = {
     "instruction_override": [
         re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions?", _F),
         re.compile(r"disregard\s+((?:all|your|prior|previous)\s+){1,3}instructions?", _F),
-        re.compile(r"forget\s+(all\s+)?(previous|prior|your)\s+instructions?", _F),
+        re.compile(r"forget\s+(all\s+)?(ur|your|previous|prior)\s+instructions?", _F),
         re.compile(r"override\s+(your|all)?\s*(instructions?|rules?|guidelines?)", _F),
         re.compile(r"bypass\s+(your|all)?\s*(instructions?|rules?|safety|restrictions?)", _F),
         re.compile(r"your\s+(new\s+)?instructions?\s+are", _F),
@@ -92,8 +92,9 @@ PATTERN_LIBRARY: dict[str, list[re.Pattern]] = {
     # ── Credential / key exfiltration ─────────────────────────────────────
     # Attempts to get the model to output real secrets it may have seen.
     "credential_exfiltration": [
-        re.compile(r"(print|output|reveal|show|give\s+me)\s+(the\s+)?(api[\s_-]?key|secret[\s_-]?key|access[\s_-]?token|password|credentials?)", _F),
+        re.compile(r"(print|output|reveal|show|give\s+me|gimme)\s+(the\s+|your\s+)?(api[\s_-]?key|secret[\s_-]?key|access[\s_-]?token|password|credentials?|secrets?)", _F),
         re.compile(r"what\s+(is\s+)?(the\s+)?(openai|gemini|anthropic)[\s_-]?(api[\s_-]?)?key", _F),
+        re.compile(r"(secrets?|passwords?|api[\s_-]?keys?)\s*[/,]\s*(secrets?|passwords?|api[\s_-]?keys?)", _F),
     ],
 }
 
