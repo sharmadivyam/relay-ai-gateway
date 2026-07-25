@@ -1,26 +1,21 @@
 """
 Semantic Cache — Phase 3.
 
-Uses ChromaDB PersistentClient (local folder, no Docker required).
+Uses ChromaDB HttpClient, pointed at the Docker ChromaDB container
+(see docker-compose.yml — service `chromadb`, exposed on host port 8002).
 
-Embeddings are computed externally and passed as raw vectors to ChromaDB
-(embedding_function=None on the collection). This avoids ALL embedding-
-function registration conflicts between runs — ChromaDB never stores or
-checks an embedding function name.
+Embeddings are computed externally via sentence-transformers and passed as
+raw vectors to ChromaDB (embedding_function=None on the collection). This
+avoids ALL embedding-function registration conflicts between runs —
+ChromaDB never stores or checks an embedding function name.
 
-Work-laptop embedding: pure-Python character 3-gram hash (no onnxruntime
-needed). Identical prompts produce identical vectors → cache hits work.
-Semantically similar but differently worded prompts won't hit — that's fine
-for dev. On personal laptop, swap _embed() for a real sentence-transformer.
-
-MIGRATION NOTE (see MIGRATION_GUIDE.md):
-  Switch chromadb.PersistentClient → chromadb.HttpClient(host, port=8001)
-  and replace _embed() with SentenceTransformerEmbeddingFunction.
+Embedding model: all-MiniLM-L6-v2 (384-dim), lazily loaded on first use.
+Semantically similar prompts (not just identical ones) will now hit the
+cache, subject to CACHE_SIMILARITY_THRESHOLD.
 """
 import asyncio
 import hashlib
 import logging
-import math
 import time
 from typing import Optional
 
@@ -33,30 +28,30 @@ _DISTANCE_THRESHOLD = 1.0 - settings.cache_similarity_threshold
 _DIM = 384
 
 
-def _embed(texts: list[str]) -> list[list[float]]:
-    """
-    Pure-Python character 3-gram hash embedding — no external deps.
-    Produces a 384-dim L2-normalised float vector per text.
+_ef = None  # lazy singleton — defers the sentence-transformers/torch import so server startup stays fast
 
-    MIGRATION: replace this function body with:
+
+def _get_ef():
+    global _ef
+    if _ef is None:
         from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
         _ef = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
-        return _ef(texts)
+    return _ef
+
+
+def _embed(texts: list[str]) -> list[list[float]]:
     """
-    results = []
-    for text in texts:
-        vec = [0.0] * _DIM
-        t = text.lower()
-        for i in range(max(1, len(t) - 2)):
-            vec[hash(t[i: i + 3]) % _DIM] += 1.0
-        norm = math.sqrt(sum(x * x for x in vec)) or 1.0
-        results.append([x / norm for x in vec])
-    return results
+    Real semantic embeddings via sentence-transformers (all-MiniLM-L6-v2,
+    384-dim — matches _DIM below). Model is downloaded from HuggingFace on
+    first use and cached locally afterward. Lazily loaded so importing this
+    module doesn't pull in torch at server startup.
+    """
+    return _get_ef()(texts)
 
 
 class SemanticCache:
     """
-    Semantic cache backed by ChromaDB PersistentClient.
+    Semantic cache backed by ChromaDB HttpClient (Docker container).
 
     Public interface:
       await cache.lookup(prompt)          -> Optional[str]
@@ -76,7 +71,7 @@ class SemanticCache:
         try:
             import chromadb
 
-            self._client = chromadb.PersistentClient(path="./chromadb_data")
+            self._client = chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port)
             # embedding_function=None — we embed manually and pass raw vectors.
             # This means ChromaDB never stores an embedding function name,
             # so there is never a conflict between runs.
