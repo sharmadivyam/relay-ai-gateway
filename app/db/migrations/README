@@ -1,0 +1,18 @@
+Alembic migrations live here.
+
+To initialize (run once after `pip install alembic`):
+
+  alembic init app/db/migrations
+
+Then edit alembic.ini:
+  sqlalchemy.url = postgresql+asyncpg://gateway:gateway@localhost:5432/gateway
+
+And edit env.py to import:
+  from app.db.models import Base
+  target_metadata = Base.metadata
+
+Generate your first migration:
+  alembic revision --autogenerate -m "initial schema"
+
+Apply it:
+  alembic upgrade head

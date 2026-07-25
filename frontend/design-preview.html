@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Relay — Design Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Space Grotesk", "system-ui", "sans-serif"],
+              mono: ["Space Mono", "monospace"],
+            },
+            colors: {
+              paper: "#FCFCFA",
+              surface: "#FFFFFF",
+              subtle: "#F1F4F1",
+              line: "#E3E7E2",
+              ink: "#14181A",
+              muted: "#6B726C",
+              green: {
+                DEFAULT: "#1C7C55",
+                soft: "#E7F2EB",
+                bright: "#35C67C",
+              },
+              danger: "#C0402B",
+              warn: "#B7791F",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body { font-family: "Space Grotesk", system-ui, sans-serif; }
+      .font-mono { font-family: "Space Mono", monospace; }
+      ::selection { background: #1C7C55; color: #fff; }
+      .section-label {
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #6B726C;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body class="bg-paper text-ink antialiased">
+    <!-- ============ NAV ============ -->
+    <header class="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-sm">
+      <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2.5">
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="4" height="4" fill="#1C7C55" />
+              <rect x="5" y="0" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+              <rect x="0" y="5" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+              <rect x="5" y="5" width="4" height="4" fill="#1C7C55" />
+              <rect x="10" y="0" width="4" height="4" fill="#35C67C" opacity="0.5" />
+              <rect x="10" y="5" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+              <rect x="0" y="10" width="4" height="4" fill="#1C7C55" opacity="0.15" />
+              <rect x="5" y="10" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+              <rect x="10" y="10" width="4" height="4" fill="#35C67C" opacity="0.5" />
+            </svg>
+            <span class="text-lg font-bold tracking-tight text-ink">Relay</span>
+          </div>
+          <nav class="hidden items-center gap-1 md:flex">
+            <a class="relative px-3 py-1.5 text-sm font-medium text-green">
+              Overview
+              <span class="absolute -bottom-[21px] left-3 right-3 h-0.5 bg-green"></span>
+            </a>
+            <a class="px-3 py-1.5 text-sm font-medium text-muted hover:text-ink">Intelligence</a>
+            <a class="px-3 py-1.5 text-sm font-medium text-muted hover:text-ink">Guardrails</a>
+            <a class="px-3 py-1.5 text-sm font-medium text-muted hover:text-ink">Chat</a>
+            <a class="px-3 py-1.5 text-sm font-medium text-muted hover:text-ink">Documents</a>
+            <a class="px-3 py-1.5 text-sm font-medium text-muted hover:text-ink">API Keys</a>
+          </nav>
+        </div>
+        <button class="text-sm font-medium text-muted hover:text-ink">Sign out</button>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl space-y-14 px-6 py-10">
+      <!-- ============ OVERVIEW HEADER ============ -->
+      <section class="space-y-8">
+        <div class="flex items-end justify-between">
+          <div>
+            <p class="section-label mb-2">Dashboard</p>
+            <h1 class="text-3xl font-bold tracking-tight text-ink">Overview</h1>
+            <p class="mt-1 text-sm text-muted">Live gateway metrics · refreshes every 3 s</p>
+          </div>
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-muted">
+            <span class="h-1.5 w-1.5 rounded-full bg-green-bright"></span>
+            Live
+          </span>
+        </div>
+
+        <!-- Hero metric row -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div class="rounded-xl border border-line bg-surface px-6 py-6">
+            <p class="section-label">Total requests</p>
+            <p class="mt-3 text-4xl font-bold tracking-tight text-ink">12,847</p>
+            <p class="mt-2 text-xs text-muted">8,204 s · 4,643 c routed</p>
+          </div>
+          <div class="rounded-xl border border-green/20 bg-green-soft px-6 py-6 shadow-sm shadow-green/5">
+            <p class="section-label" style="color:#1C7C55">Total saved</p>
+            <p class="mt-3 text-4xl font-bold tracking-tight text-green">$184.62</p>
+            <p class="mt-2 text-xs text-muted">vs $412.90 spent</p>
+          </div>
+          <div class="rounded-xl border border-line bg-surface px-6 py-6">
+            <p class="section-label">Avg latency</p>
+            <p class="mt-3 text-4xl font-bold tracking-tight text-ink">412ms</p>
+            <p class="mt-2 text-xs text-muted">3,201,984 tokens total</p>
+          </div>
+        </div>
+
+        <!-- Secondary health row -->
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div class="rounded-lg border border-line bg-surface px-5 py-4">
+            <p class="section-label">Cache hits</p>
+            <p class="mt-2 text-2xl font-semibold text-ink">38.4%</p>
+          </div>
+          <div class="rounded-lg border border-danger/20 bg-danger/5 px-5 py-4">
+            <p class="section-label" style="color:#C0402B">Blocked</p>
+            <p class="mt-2 text-2xl font-semibold text-danger">23</p>
+          </div>
+          <div class="rounded-lg border border-warn/20 bg-warn/5 px-5 py-4">
+            <p class="section-label" style="color:#B7791F">Redacted</p>
+            <p class="mt-2 text-2xl font-semibold text-warn">57</p>
+          </div>
+          <div class="rounded-lg border border-line bg-surface px-5 py-4">
+            <p class="section-label">Fallbacks</p>
+            <p class="mt-2 text-2xl font-semibold text-ink">9</p>
+          </div>
+          <div class="rounded-lg border border-line bg-surface px-5 py-4">
+            <p class="section-label">Errors</p>
+            <p class="mt-2 text-2xl font-semibold text-ink">2</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CHARTS ROW ============ -->
+      <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <!-- Donut -->
+        <div class="rounded-xl border border-line bg-surface p-6">
+          <h3 class="text-sm font-semibold text-ink">Routing tier split</h3>
+          <p class="mt-0.5 text-xs text-muted">Complex → premium · Simple → cheap</p>
+          <div class="mt-6 flex items-center justify-center gap-10">
+            <svg width="150" height="150" viewBox="0 0 42 42">
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#E3E7E2" stroke-width="6"></circle>
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#1C7C55" stroke-width="6"
+                stroke-dasharray="64 36" stroke-dashoffset="25" stroke-linecap="round"></circle>
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#35C67C" stroke-width="6"
+                stroke-dasharray="36 64" stroke-dashoffset="-39" stroke-linecap="round"></circle>
+            </svg>
+            <div class="space-y-3 text-sm">
+              <div class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-sm bg-green"></span>
+                <span class="text-ink">Complex</span>
+                <span class="ml-auto font-mono text-xs text-muted">64%</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-sm bg-green-bright"></span>
+                <span class="text-ink">Simple</span>
+                <span class="ml-auto font-mono text-xs text-muted">36%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bars -->
+        <div class="rounded-xl border border-line bg-surface p-6">
+          <h3 class="text-sm font-semibold text-ink">Daily savings (USD)</h3>
+          <p class="mt-0.5 text-xs text-muted">Routing + compression, last 7 days</p>
+          <div class="mt-8 flex h-[150px] items-end justify-between gap-3">
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:20%"></div>
+              <div class="w-full rounded-b bg-green" style="height:35%"></div>
+            </div>
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:28%"></div>
+              <div class="w-full rounded-b bg-green" style="height:44%"></div>
+            </div>
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:18%"></div>
+              <div class="w-full rounded-b bg-green" style="height:30%"></div>
+            </div>
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:40%"></div>
+              <div class="w-full rounded-b bg-green" style="height:52%"></div>
+            </div>
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:30%"></div>
+              <div class="w-full rounded-b bg-green" style="height:60%"></div>
+            </div>
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:24%"></div>
+              <div class="w-full rounded-b bg-green" style="height:48%"></div>
+            </div>
+            <div class="flex h-full flex-1 flex-col justify-end gap-1">
+              <div class="w-full rounded-t bg-green-bright" style="height:46%"></div>
+              <div class="w-full rounded-b bg-green" style="height:70%"></div>
+            </div>
+          </div>
+          <div class="mt-4 flex gap-4 text-xs text-muted">
+            <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-green"></span>Routing</span>
+            <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-green-bright"></span>Compression</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ TABLE ============ -->
+      <section>
+        <h3 class="mb-4 text-sm font-semibold text-ink">Recent requests</h3>
+        <div class="overflow-hidden rounded-xl border border-line bg-surface">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-line text-left">
+                <th class="px-5 py-3.5 section-label font-medium">Time</th>
+                <th class="px-5 py-3.5 section-label font-medium">Model</th>
+                <th class="px-5 py-3.5 section-label font-medium">Routing</th>
+                <th class="px-5 py-3.5 section-label font-medium">Latency</th>
+                <th class="px-5 py-3.5 section-label font-medium">Cost</th>
+                <th class="px-5 py-3.5 section-label font-medium">Saved</th>
+                <th class="px-5 py-3.5 section-label font-medium">Guardrails</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-line/60 bg-green-soft/40">
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">14:32:08</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">gpt-4o-mini</td>
+                <td class="px-5 py-3.5"><span class="rounded border border-green/20 bg-green-soft px-2 py-0.5 text-xs font-medium text-green">simple</span></td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">284ms</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">$0.00012</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-green">+$0.00081</td>
+                <td class="px-5 py-3.5"></td>
+              </tr>
+              <tr class="border-b border-line/60">
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">14:32:01</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">gpt-4o</td>
+                <td class="px-5 py-3.5"><span class="rounded border border-warn/20 bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn">complex</span></td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">1.24s</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">$0.00840</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">—</td>
+                <td class="px-5 py-3.5"><span class="rounded border border-warn/20 bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn">redacted</span></td>
+              </tr>
+              <tr class="border-b border-line/60">
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">14:31:47</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">cache</td>
+                <td class="px-5 py-3.5"><span class="rounded border border-green/20 bg-green-soft px-2 py-0.5 text-xs font-medium text-green">cached</span></td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">12ms</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">$0.00000</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-green">+$0.00420</td>
+                <td class="px-5 py-3.5"></td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">14:31:32</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-ink">BLOCKED</td>
+                <td class="px-5 py-3.5"></td>
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">—</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">—</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-muted">—</td>
+                <td class="px-5 py-3.5"><span class="rounded border border-danger/20 bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">blocked</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ CHAT + BUTTONS/BADGES ============ -->
+      <section class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <!-- Chat -->
+        <div>
+          <h3 class="mb-4 text-sm font-semibold text-ink">Chat</h3>
+          <div class="space-y-4 rounded-xl border border-line bg-surface p-6">
+            <div class="flex justify-end">
+              <div class="max-w-[80%] rounded-2xl rounded-tr-sm border border-green/20 bg-green-soft px-4 py-3 text-sm text-ink">
+                Summarize the attached contract in 3 bullet points.
+              </div>
+            </div>
+            <div class="flex justify-start">
+              <div class="max-w-[80%]">
+                <div class="rounded-2xl rounded-tl-sm border border-line bg-subtle px-4 py-3 text-sm text-ink">
+                  Here are the key points: liability is capped at fees paid, the term auto-renews annually, and either party may terminate with 30 days notice.
+                </div>
+                <span class="mt-1.5 inline-block rounded border border-green/20 bg-green-soft px-2 py-0.5 text-xs font-medium text-green">gpt-4o-mini</span>
+              </div>
+            </div>
+            <div class="flex items-end gap-2 border-t border-line pt-4">
+              <div class="flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-sm text-muted">Message…</div>
+              <button class="rounded-lg bg-green p-2.5 text-white">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Components -->
+        <div>
+          <h3 class="mb-4 text-sm font-semibold text-ink">Components</h3>
+          <div class="space-y-6 rounded-xl border border-line bg-surface p-6">
+            <div class="space-y-3">
+              <p class="section-label">Buttons</p>
+              <div class="flex flex-wrap items-center gap-3">
+                <button class="rounded-md bg-green px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Primary</button>
+                <button class="rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:border-muted/40">Secondary</button>
+                <button class="text-sm font-medium text-green hover:opacity-80">Text link</button>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <p class="section-label">Badges</p>
+              <div class="flex flex-wrap gap-2">
+                <span class="rounded border border-green/20 bg-green-soft px-2 py-0.5 text-xs font-medium text-green">simple</span>
+                <span class="rounded border border-warn/20 bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn">redacted</span>
+                <span class="rounded border border-danger/20 bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">blocked</span>
+                <span class="rounded border border-line bg-subtle px-2 py-0.5 text-xs font-medium text-muted">n/a</span>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <p class="section-label">Day-range chip track</p>
+              <div class="inline-flex gap-1 rounded-lg border border-line bg-subtle p-1">
+                <button class="rounded-md bg-green px-3 py-1 text-xs font-medium text-white">7d</button>
+                <button class="rounded-md px-3 py-1 text-xs font-medium text-muted hover:text-ink">14d</button>
+                <button class="rounded-md px-3 py-1 text-xs font-medium text-muted hover:text-ink">30d</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LOGIN CARD ============ -->
+      <section>
+        <h3 class="mb-4 text-sm font-semibold text-ink">Login</h3>
+        <div class="relative overflow-hidden rounded-xl border border-line bg-paper p-10">
+          <div class="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full"
+            style="background: radial-gradient(circle, rgba(53,198,124,0.14) 0%, transparent 70%);"></div>
+          <div class="pointer-events-none absolute -bottom-32 -left-24 h-72 w-72 rounded-full"
+            style="background: radial-gradient(circle, rgba(28,124,85,0.10) 0%, transparent 70%);"></div>
+          <div class="relative z-10 mx-auto w-full max-w-sm rounded-xl border border-line bg-surface p-8 shadow-sm">
+            <div class="mb-8 flex items-center gap-2.5">
+              <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
+                <rect x="0" y="0" width="4" height="4" fill="#1C7C55" />
+                <rect x="5" y="0" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+                <rect x="0" y="5" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+                <rect x="5" y="5" width="4" height="4" fill="#1C7C55" />
+                <rect x="10" y="0" width="4" height="4" fill="#35C67C" opacity="0.5" />
+                <rect x="10" y="5" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+                <rect x="0" y="10" width="4" height="4" fill="#1C7C55" opacity="0.15" />
+                <rect x="5" y="10" width="4" height="4" fill="#1C7C55" opacity="0.4" />
+                <rect x="10" y="10" width="4" height="4" fill="#35C67C" opacity="0.5" />
+              </svg>
+              <span class="text-xl font-bold tracking-tight text-ink">Relay</span>
+            </div>
+            <h1 class="text-xl font-semibold text-ink">Sign in</h1>
+            <p class="mt-1 text-sm text-muted">LLM reverse proxy</p>
+            <div class="mt-6 space-y-4">
+              <div>
+                <label class="block text-xs font-medium text-muted">Email</label>
+                <div class="mt-1.5 w-full rounded-md border border-line bg-paper px-3 py-2 text-sm text-muted">you@example.com</div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-muted">Password</label>
+                <div class="mt-1.5 w-full rounded-md border border-line bg-paper px-3 py-2 text-sm text-muted">••••••••</div>
+              </div>
+              <button class="w-full rounded-md bg-green px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">Sign in</button>
+            </div>
+            <p class="mt-5 text-center text-xs text-muted">Don't have an account? <span class="font-medium text-green">Register</span></p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="border-t border-line pt-6 text-center text-xs text-muted">
+        Relay — light editorial preview · Space Grotesk · white / grey-green / green
+      </footer>
+    </main>
+  </body>
+</html>

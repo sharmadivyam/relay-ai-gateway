@@ -1,0 +1,53 @@
+# ── Web Framework ───────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# ── Settings & Validation ────────────────────────────────────────────────
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+
+# ── Database ─────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.30
+asyncpg>=0.29.0          # Postgres async driver (personal laptop / Docker)
+aiosqlite>=0.19.0        # SQLite async driver  (work laptop — no Docker)
+alembic>=1.13.0
+
+# ── Auth ─────────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.1.0
+# passlib removed — replaced with direct bcrypt calls (passlib 1.7.4 is
+# incompatible with bcrypt 4.x on Python 3.14: __about__ removed + hashpw API change)
+
+# ── Redis ────────────────────────────────────────────────────────────────
+redis>=5.0.4
+
+# ── LLM Providers (no Rust build required) ───────────────────────────────
+openai>=1.30.0
+httpx>=0.27.0
+tiktoken>=0.7.0
+
+# ── Phase 3: Semantic Cache ───────────────────────────────────────────────
+# Uses ChromaDB's built-in ONNX DefaultEmbeddingFunction (all-MiniLM-L6-v2).
+# Downloaded from ChromaDB CDN — avoids HuggingFace SSL issues on work laptops.
+chromadb>=0.5.0
+# sentence-transformers>=3.0.0   # uncomment on personal laptop for richer models
+
+# ── Phase 2: Prompt compression ───────────────────────────────────────────
+llmlingua
+
+# ── Phase 6: Document ingestion ───────────────────────────────────────────
+# Work laptop (Python 3.14 + Windows): onnxruntime DLL fails — use direct converters below.
+# Personal laptop (Mac/Linux): uncomment markitdown and remove the five direct-converter lines.
+#
+# markitdown[pdf,docx,pptx]   ← uncomment on Mac/Linux (and see MIGRATION_GUIDE.md)
+
+pdfplumber>=0.11.9     # PDF text extraction   (work laptop only)
+mammoth~=1.11.0        # DOCX → Markdown       (work laptop only)
+python-pptx            # PPTX text extraction  (work laptop only)
+beautifulsoup4         # HTML text extraction  (work laptop only)
+lxml                   # HTML/XML parser       (work laptop only)
+python-multipart       # multipart file upload support (both platforms)
+
+# ── Testing ───────────────────────────────────────────────────────────────
+pytest>=8.2.0
+pytest-asyncio>=0.23.0

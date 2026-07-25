@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #FCFCFA;
+  --surface: #FFFFFF;
+  --subtle: #F1F4F1;
+  --line: #E3E7E2;
+  --ink: #14181A;
+  --muted: #6B726C;
+  --green: #1C7C55;
+  --green-soft: #E7F2EB;
+  --green-bright: #35C67C;
+  --danger: #C0402B;
+  --warn: #B7791F;
+}
+
+@layer base {
+  *, *::before, *::after {
+    border-color: var(--line);
+  }
+
+  body {
+    @apply bg-paper text-ink antialiased font-sans;
+  }
+
+  ::selection {
+    background: var(--green);
+    color: #fff;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbar — light */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--paper); }
+  ::-webkit-scrollbar-thumb { background: #D7DCD6; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #C2C9C0; }
+}
+
+@layer utilities {
+  /* Uppercase micro-labels — editorial section labels */
+  .section-label {
+    @apply text-[11px] font-medium uppercase tracking-[0.14em] text-muted;
+  }
+}
+
+/* Metric value fade animation on poll update */
+@keyframes metric-fade {
+  0%   { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+
+.metric-update {
+  animation: metric-fade 0.5s ease-out;
+}
+
+/* Nav active underline slide */
+@keyframes underline-in {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.nav-active-line {
+  animation: underline-in 0.2s ease-out forwards;
+  transform-origin: left;
+}
+
+/* Eval case result reveal */
+@keyframes result-pop {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.98); }
+  60%  { transform: translateY(0) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.result-pop {
+  animation: result-pop 0.28s ease-out;
+}
