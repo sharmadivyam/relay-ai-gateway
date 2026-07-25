@@ -17,9 +17,9 @@
     "id": "simple_003",
     "category": "routing",
     "prompt": "short plain text",
-    "token_count": 300,
+    "token_count": 150,
     "expected_tier": "simple",
-    "note": "Exactly 300 tokens — threshold is > 300 so this is still simple"
+    "note": "Exactly 150 tokens — threshold is > 150 so this is still simple"
   },
   {
     "id": "complex_001",

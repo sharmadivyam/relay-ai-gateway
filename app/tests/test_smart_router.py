@@ -37,9 +37,9 @@ def test_simple_uses_cheap_model():
     assert result["model"] == CHEAP
 
 
-def test_exactly_300_tokens_is_simple():
+def test_exactly_150_tokens_is_simple():
     with patch("app.services.smart_router.get_settings", return_value=_mock_settings()):
-        result = route("short plain text", token_count=300)
+        result = route("short plain text", token_count=150)
     assert result["tier"] == "simple"
 
 
