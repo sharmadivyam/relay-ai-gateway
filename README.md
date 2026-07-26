@@ -2,7 +2,28 @@
 
 ![tests](https://github.com/<you>/<repo>/actions/workflows/tests.yml/badge.svg)
 
-A production-grade **AI Gateway / Reverse Proxy** with a built-in **React analytics dashboard**. Sits between client applications and LLM providers, adding auth, rate limiting, prompt guardrails, semantic caching, smart routing, prompt compression, savings telemetry, document ingestion, and a live web UI — all behind feature flags.
+## What this is
+
+**Relay** is a self-hosted AI Gateway — a reverse proxy that sits between your applications and LLM providers (Cerebras, OpenAI, Gemini, and 100+ others via [litellm](https://docs.litellm.ai)). Instead of every service in your stack calling an LLM provider directly with its own API key, error handling, and cost tracking, they all call *this* gateway, which speaks the standard **OpenAI-compatible chat completions API** — so nothing on the client side has to change.
+
+In exchange, every request passing through gets, automatically and without any client-side code:
+
+- **Authentication & per-tier rate limiting** — so you're not trusting every internal service with a raw provider key
+- **Guardrails on the way in and out** — prompt-injection/jailbreak detection before the LLM ever sees a request, and PII redaction (SSNs, emails, cards, keys) before a response leaves the building
+- **Cost savings, automatically** — a semantic cache serves repeat-ish questions without a new LLM call, and (optional) smart routing sends simple prompts to a cheaper model
+- **Visibility** — every request, cost, latency, cache hit, and guardrail action is logged and rendered live in a built-in dashboard, so you can *see* what your LLM spend and safety posture actually look like, not just guess
+
+Think of it as the layer you'd otherwise have to hand-roll in every service that talks to an LLM — built once, sitting in front of all of them.
+
+**At a glance:**
+
+| | |
+|---|---|
+| **Stack** | Python 3.12 · FastAPI · PostgreSQL · Redis · ChromaDB · litellm · React 18 · Vite · TypeScript |
+| **API** | OpenAI-compatible — `POST /v1/chat/completions`, drop-in for existing OpenAI clients |
+| **Dashboard** | "Relay" — live metrics, request feed, guardrail activity, cost/savings charts |
+| **Status** | All phases (0–6) implemented and tested · 149 tests passing · full Docker infra (Postgres/Redis/ChromaDB/Superset) |
+| **Deployment** | Single process — FastAPI serves both the API and the built dashboard on one port |
 
 ---
 
@@ -11,12 +32,12 @@ A production-grade **AI Gateway / Reverse Proxy** with a built-in **React analyt
 | Feature | Status | Flag |
 |---|---|---|
 | JWT + API-key authentication | Always on | — |
-| Per-tier rate limiting (Redis / in-memory) | Always on | — |
-| Input guardrails — 26+ prompt-injection patterns | Always on | — |
-| Semantic cache (ChromaDB, cosine ≥ 0.95, 24 h TTL) | Always on | — |
+| Per-tier rate limiting (Redis / in-memory fallback) | Always on | — |
+| Input guardrails — 26+ regex patterns + semantic similarity fallback | Always on | `ENABLE_SEMANTIC_GUARDRAILS` (Layer 2 only) |
+| Semantic cache (ChromaDB, real sentence-transformer embeddings, cosine ≥ 0.95, 24 h TTL) | Always on | `ENABLE_SEMANTIC_CACHE` |
 | Output guardrails — 8 PII redaction rules | Always on | — |
 | Async telemetry + cost logging | Always on | — |
-| **Read-only analytics API** — 3 GET endpoints | Always on | — |
+| **Read-only analytics API** — 6 GET endpoints | Always on | — |
 | **Smart routing** — cheap vs. premium model | Off by default | `ENABLE_SMART_ROUTING` |
 | **Prompt compression** — LLMLingua-2 | Off by default | `ENABLE_PROMPT_COMPRESSION` |
 | **Document ingestion** — PDF / DOCX / PPTX → Markdown | Always on | — |
@@ -29,52 +50,69 @@ A production-grade **AI Gateway / Reverse Proxy** with a built-in **React analyt
 
 ## Quick Start
 
-> Moving this project from the Windows work laptop to a personal Mac? Follow [`SETUP_ON_MAC.md`](SETUP_ON_MAC.md) — it covers zipping (with the right exclusions) and reproducing the current running system on macOS.
+### 1. Start the infrastructure (Postgres, Redis, ChromaDB, Superset)
 
-### 1. Clone and create the virtual environment
+```bash
+docker compose up -d
+```
 
-```powershell
+Check everything's healthy:
+
+```bash
+docker compose ps
+```
+
+### 2. Clone and create the virtual environment
+
+```bash
 git clone <repo-url>
 cd my_proj
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-### 2. Install Python dependencies
+### 3. Install Python dependencies
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Rust is required for `litellm`'s build step:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+pip install -r requirements.txt
 ```
 
-### 3. Configure environment
+### 4. Configure environment
 
-```powershell
-copy .env.example .env
-# Open .env and fill in OPENAI_API_KEY (and OPENAI_BASE_URL if using Cerebras or another provider)
+```bash
+cp .env.example .env
+# Open .env and fill in CEREBRAS_API_KEY
 ```
 
 Minimum viable `.env`:
 
 ```env
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.cerebras.ai/v1   # or https://api.openai.com/v1
+CEREBRAS_API_KEY=csk-...
+PRIMARY_MODEL=cerebras/gpt-oss-120b
+FALLBACK_MODEL=cerebras/gpt-oss-120b
 JWT_SECRET_KEY=change-me-to-a-long-random-string
-DATABASE_URL=sqlite+aiosqlite:///./gateway_dev.db
+DATABASE_URL=postgresql+asyncpg://gateway:gateway@localhost:5432/gateway
 ```
 
-### 4. Start the gateway
+> **Model names need the provider prefix.** litellm routes by prefix (`cerebras/`, `gemini/`, etc.) — a bare model name like `gpt-oss-120b` fails with `LLM Provider NOT provided`. This applies to `PRIMARY_MODEL`, `FALLBACK_MODEL`, and (if smart routing is on) `CHEAP_MODEL`/`PREMIUM_MODEL` too.
 
-```powershell
-.\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8001
+### 5. Start the gateway
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 Swagger UI: **http://127.0.0.1:8001/docs**
 
-### 5. Start the dashboard (dev mode)
+### 6. Start the dashboard (dev mode)
 
 In a second terminal:
 
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
@@ -90,12 +128,12 @@ Dashboard: **http://localhost:5173** — register an account and log in.
 
 Build the frontend once, then let FastAPI serve it:
 
-```powershell
+```bash
 cd frontend
 npm run build     # outputs frontend/dist/
 
 cd ..
-.\.venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8001
+uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 `main.py` auto-detects `frontend/dist/` and mounts it at `/` after all API routes.  
@@ -107,8 +145,8 @@ Everything — API + dashboard — runs from **one process on one port**.
 
 Populates the dashboard with believable data before a screen recording:
 
-```powershell
-.\.venv\Scripts\python.exe demo_seed.py --email demo@gateway.ai --password demo1234
+```bash
+python demo_seed.py --email demo@gateway.ai --password demo1234
 ```
 
 Fires 11 scripted requests — simple, complex, cached duplicate, and one guardrail-blocked — so every column in the live feed is exercised immediately.
@@ -135,15 +173,15 @@ Returns `{"status": "ok"}`. No auth required. Liveness probe.
 | POST | `/auth/keys` | JWT | Create an API key (raw key shown once) |
 | GET | `/auth/keys` | JWT | List active API keys |
 
-```powershell
+```bash
 # Register
-curl -X POST http://localhost:8001/auth/register `
-  -H "Content-Type: application/json" `
+curl -X POST http://localhost:8001/auth/register \
+  -H "Content-Type: application/json" \
   -d '{"email": "you@example.com", "password": "secret"}'
 
 # Login → get JWT
-curl -X POST http://localhost:8001/auth/login `
-  -H "Content-Type: application/json" `
+curl -X POST http://localhost:8001/auth/login \
+  -H "Content-Type: application/json" \
   -d '{"email": "you@example.com", "password": "secret"}'
 # → {"access_token": "eyJ...", "token_type": "bearer"}
 ```
@@ -159,11 +197,11 @@ Authorization: Bearer <jwt-or-api-key>
 
 Drop-in replacement for the OpenAI chat completions endpoint.
 
-```powershell
-curl -X POST http://localhost:8001/v1/chat/completions `
-  -H "Authorization: Bearer eyJ..." `
-  -H "Content-Type: application/json" `
-  -d '{"model": "gpt-oss-120b", "messages": [{"role": "user", "content": "Hello!"}]}'
+```bash
+curl -X POST http://localhost:8001/v1/chat/completions \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{"model": "cerebras/gpt-oss-120b", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
 **Response extras** (beyond standard OpenAI fields):
@@ -187,9 +225,9 @@ Content-Type: multipart/form-data
 
 Upload a file and receive its contents as Markdown. Supported: **PDF, DOCX, PPTX**, HTML, CSV, JSON, XML, and more.
 
-```powershell
-curl -X POST http://localhost:8001/v1/documents/ingest `
-  -H "Authorization: Bearer eyJ..." `
+```bash
+curl -X POST http://localhost:8001/v1/documents/ingest \
+  -H "Authorization: Bearer eyJ..." \
   -F "file=@report.pdf"
 # → {"markdown": "...", "original_bytes": 204800, "filename": "report.pdf"}
 ```
@@ -198,13 +236,16 @@ curl -X POST http://localhost:8001/v1/documents/ingest `
 
 ### Analytics (read-only, per-user)
 
-All three endpoints filter to the logged-in user's own data. No writes.
+All endpoints filter to the logged-in user's own data. No writes.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/v1/analytics/overview` | JWT / API Key | Aggregate totals |
 | GET | `/v1/analytics/requests?limit=50` | JWT / API Key | Most-recent request log, newest first |
 | GET | `/v1/analytics/savings-timeseries?days=7` | JWT / API Key | Per-day savings breakdown |
+| GET | `/v1/analytics/guardrails-timeseries?days=7` | JWT / API Key | Per-day blocked/redacted/passed counts |
+| GET | `/v1/analytics/models` | JWT / API Key | Request count + cost grouped by model used |
+| GET | `/v1/analytics/guardrail-events?limit=50` | JWT / API Key | Recent requests where a guardrail fired |
 
 **`/v1/analytics/overview` response:**
 
@@ -294,24 +335,28 @@ All settings are loaded from `.env` via Pydantic `BaseSettings`. Restart the ser
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | _(required)_ | Provider API key |
-| `OPENAI_BASE_URL` | `https://api.cerebras.ai/v1` | Any OpenAI-compatible endpoint |
+| `CEREBRAS_API_KEY` | _(required)_ | Read automatically by litellm for any `cerebras/`-prefixed model |
+| `GEMINI_API_KEY` | _(optional)_ | Read automatically by litellm for any `gemini/`-prefixed model |
 | `JWT_SECRET_KEY` | `change-me` | HS256 signing key — **change this in production** |
 | `JWT_EXPIRE_MINUTES` | `60` | JWT lifetime |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./gateway_dev.db` | SQLite (dev) or `postgresql+asyncpg://...` (prod) |
-| `REDIS_URL` | `redis://localhost:6379` | Rate limiter backend — auto-falls back to in-memory |
-| `PRIMARY_MODEL` | `gpt-oss-120b` | Model used by default |
-| `FALLBACK_MODEL` | `llama3.1-8b` | Used automatically on 429 / 503 |
+| `DATABASE_URL` | `postgresql+asyncpg://gateway:gateway@localhost:5432/gateway` | Requires `docker compose up -d postgres` |
+| `REDIS_URL` | `redis://localhost:6379` | Rate limiter backend — auto-falls back to in-memory if unreachable |
+| `PRIMARY_MODEL` | `cerebras/gpt-oss-120b` | Model used by default — **must** carry the provider prefix |
+| `FALLBACK_MODEL` | `cerebras/gpt-oss-120b` | Used automatically on 429 / 503 — **must** carry the provider prefix |
+| `ENABLE_SEMANTIC_CACHE` | `true` | Enable ChromaDB semantic cache |
+| `CHROMA_HOST` | `localhost` | ChromaDB Docker container host |
+| `CHROMA_PORT` | `8002` | ChromaDB Docker container port |
 | `CACHE_SIMILARITY_THRESHOLD` | `0.95` | Cosine similarity cutoff for cache hits |
 | `CACHE_TTL_HOURS` | `24` | How long cache entries live |
 | `RATE_LIMIT_FREE` | `10000` | Tokens per minute — free tier |
 | `RATE_LIMIT_PRO` | `100000` | Tokens per minute — pro tier |
 | `RATE_LIMIT_ENTERPRISE` | `1000000` | Tokens per minute — enterprise tier |
 | `ENABLE_SMART_ROUTING` | `false` | Route simple prompts to a cheaper model |
-| `CHEAP_MODEL` | `gpt-4o-mini` | Model for simple prompts |
-| `PREMIUM_MODEL` | `gpt-4o` | Model for complex prompts |
+| `CHEAP_MODEL` | `cerebras/gemma-4-31b` | Model for simple prompts — **must** carry the provider prefix |
+| `PREMIUM_MODEL` | `cerebras/gpt-oss-120b` | Model for complex prompts — **must** carry the provider prefix |
 | `ENABLE_PROMPT_COMPRESSION` | `false` | Compress long prompts with LLMLingua-2 |
 | `COMPRESSION_THRESHOLD_TOKENS` | `1500` | Prompts shorter than this are never compressed |
+| `ENABLE_SEMANTIC_GUARDRAILS` | `true` | Enable semantic-similarity fallback in input guardrails (catches paraphrases regex misses) |
 
 ---
 
@@ -340,8 +385,8 @@ Compresses prompts above the threshold with LLMLingua-2 at 50 % reduction before
 
 ## Running Tests
 
-```powershell
-.\.venv\Scripts\pytest.exe app/tests/ -v
+```bash
+pytest app/tests/ -v
 ```
 
 Expected: **149 tests, 0 failures**.
@@ -357,8 +402,8 @@ Expected: **149 tests, 0 failures**.
 
 Run only the regression eval suite (fast, no server, no LLM):
 
-```powershell
-.\.venv\Scripts\pytest.exe app/tests/test_regression_eval.py -v
+```bash
+pytest app/tests/test_regression_eval.py -v
 ```
 
 ### CI (GitHub Actions)
@@ -375,8 +420,8 @@ Replace `<you>/<repo>` in the badge URL at the top of this file with your GitHub
 
 Analytically estimates routing cost savings across 32 synthetic prompts (no server or API credits needed):
 
-```powershell
-.\.venv\Scripts\python.exe benchmark/run_benchmark.py
+```bash
+python benchmark/run_benchmark.py
 ```
 
 Results written to `benchmark/results.md`.
@@ -400,10 +445,10 @@ my_proj/
 │   │   ├── analytics.py          /v1/analytics/* — 3 read-only GET endpoints
 │   │   └── evals.py              /v1/evals/* — cases, run-case, sandbox (pure fns)
 │   ├── services/
-│   │   ├── llm_router.py         LLM provider adapter + cost table
-│   │   ├── telemetry.py          Async savings logger (BackgroundTasks)
-│   │   ├── cache.py              Semantic cache (ChromaDB + ONNX)
-│   │   ├── guardrails_in.py      Input guardrails (26+ regex patterns)
+│   │   ├── llm_router.py         LLM provider adapter (litellm) + cost table
+│   │   ├── telemetry.py          Async savings logger (BackgroundTasks for success/cache; awaited directly on blocked/error paths)
+│   │   ├── cache.py              Semantic cache (ChromaDB HttpClient + real sentence-transformers)
+│   │   ├── guardrails_in.py      Input guardrails — regex (26+ patterns) + semantic similarity fallback
 │   │   ├── guardrails_out.py     Output PII redaction (8 rules)
 │   │   ├── smart_router.py       Prompt complexity classifier (pure function)
 │   │   ├── prompt_compressor.py  LLMLingua-2 wrapper (lazy singleton)
@@ -411,7 +456,7 @@ my_proj/
 │   ├── db/
 │   │   ├── models.py             SQLAlchemy ORM: User, ApiKey, RequestLog
 │   │   ├── schemas.py            Pydantic request/response/telemetry shapes
-│   │   └── session.py            Async DB session (SQLite/PostgreSQL)
+│   │   └── session.py            Async DB session (PostgreSQL)
 │   └── tests/
 │       ├── conftest.py           In-memory SQLite fixture
 │       ├── eval_dataset.json     Golden dataset — 61 routing + guardrail cases
@@ -460,7 +505,7 @@ my_proj/
 │   └── results.md
 ├── superset/
 │   └── dashboard_queries.sql     5 pre-built Superset analytics queries
-├── docker-compose.yml            PostgreSQL + Redis + ChromaDB + Superset
+├── docker-compose.yml            PostgreSQL + Redis + ChromaDB + Superset — active infra, `docker compose up -d`
 ├── requirements.txt              Full local install (includes llmlingua, markitdown, chromadb)
 ├── requirements-ci.txt           Lean CI deps — omits heavy lazy-import packages
 ├── pytest.ini
@@ -473,18 +518,24 @@ my_proj/
 
 ---
 
-## Dev vs. Production
+## Historical vs. Current
 
-| Component | Dev (no Docker) | Production (Docker) |
+This project was originally built on a locked-down work laptop (no Docker, no Rust, no HuggingFace access) and later migrated once Docker Desktop was available. What changed:
+
+| Component | Historical (work laptop) | Current (active now) |
 |---|---|---|
-| Database | SQLite (`gateway_dev.db`) | PostgreSQL 16 |
-| Rate limiter | In-memory dict | Redis 7 |
-| Vector cache | ChromaDB `PersistentClient` (`./chromadb_data`) | ChromaDB Docker container |
-| LLM SDK | `openai` SDK + custom `base_url` | `litellm` (see `MIGRATION_GUIDE.md`) |
-| Frontend | Vite dev server (port 5173) | Built into `frontend/dist/`, served by FastAPI |
+| Database | SQLite (`gateway_dev.db`) | **PostgreSQL 16** (Docker) |
+| Rate limiter | In-memory dict | **Redis 7** (Docker) |
+| Vector cache | ChromaDB `PersistentClient` (`./chromadb_data`) | **ChromaDB `HttpClient`** (Docker, port 8002) |
+| Cache embeddings | Pure-Python 3-gram hash | **Real `sentence-transformers`** (`all-MiniLM-L6-v2`) |
+| LLM SDK | `openai` SDK + custom `base_url` | **`litellm`** — native multi-provider routing |
+| Input guardrails | Regex only | **Regex + semantic similarity fallback** |
+| Frontend | Vite dev server (port 5173) | Same in dev; built into `frontend/dist/` for prod, served by FastAPI |
 
-```powershell
-# Full production stack
+Full design rationale and the bugs found/fixed along the way (a `BackgroundTasks`-on-raised-exception bug in telemetry, a generator exception-handling bug in the rate limiter) are in [`ARCHITECTURE.md`](ARCHITECTURE.md) §9, §12, and §13; the original step-by-step workaround log is in [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md).
+
+```bash
+# Full stack, all infra
 docker compose up -d
 ```
 
@@ -496,7 +547,7 @@ docker compose up -d
 - API keys: only the **SHA-256 hash** is stored — raw key shown once and never persisted.
 - JWT signed with **HS256**; expires after 60 minutes (configurable).
 - Dashboard JWT stored **in React state / memory only** — never written to `localStorage`.
-- Input guardrails cover [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/) categories LLM01, LLM02, and LLM06.
+- Input guardrails cover [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/) categories LLM01, LLM02, and LLM06 — regex (instant, 26+ patterns) plus a semantic-similarity fallback that catches paraphrases regex misses (e.g. "tell me your secret api keys" vs. a regex list that only expected "give me"/"show"/"reveal").
 - Output guardrails redact SSN, credit card, email, phone, API keys, bearer tokens, IPs, and passwords.
 
 ---
