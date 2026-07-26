@@ -70,10 +70,13 @@ async def chat_completions(
     input_result = await scan_input(messages_raw)
 
     if input_result.action == "blocked":
-        # ORDERING: add_task BEFORE raise — the exception unwinds the stack
-        # immediately; any code after raise never executes.
-        background_tasks.add_task(
-            log_request,
+        # NOTE: background_tasks.add_task() only fires if it's attached to
+        # the Response that actually gets returned. raise HTTPException makes
+        # Starlette build a brand-new error response instead — this
+        # background_tasks object (and anything queued on it) is discarded,
+        # not delayed. So for any path that raises rather than returns, we
+        # must await log_request() directly instead.
+        await log_request(
             TelemetryPayload(
                 user_id=caller.user.id,
                 api_key_prefix=caller.api_key_prefix,
@@ -168,9 +171,9 @@ async def chat_completions(
     try:
         llm_result = await call_llm(request, model_override=model_for_llm)
     except Exception as exc:
-        # ORDERING: add_task BEFORE raise (see blocked-path comment above).
-        background_tasks.add_task(
-            log_request,
+        # Same reasoning as the blocked-path fix above: this branch raises,
+        # so background_tasks.add_task() here would be silently discarded.
+        await log_request(
             TelemetryPayload(
                 user_id=caller.user.id,
                 api_key_prefix=caller.api_key_prefix,

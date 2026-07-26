@@ -1,18 +1,13 @@
 """
 Redis-based token-per-minute (TPM) rate limiter with in-memory fallback.
 
-WORK LAPTOP NOTE (see MIGRATION_GUIDE.md):
-  Redis is not running (no Docker). get_redis_client() detects this and yields
-  None. check_rate_limit() falls back to an in-memory dict-based counter that
-  is correct for a single-process dev server.
-
-  In-memory counter limitations (acceptable for local dev only):
-    - Not persistent across server restarts
-    - Not shared across multiple uvicorn workers
-    - No atomic guarantee (single-process, so no race conditions in practice)
-
-  On personal laptop: docker compose up -d redis — the Redis pipeline path
-  re-activates automatically with zero code changes.
+get_redis_client() pings Redis on every request. If Redis is reachable, the
+sliding-window Redis pipeline path is used (production-correct, shared across
+processes). If not, check_rate_limit() falls back to an in-memory dict-based
+counter, correct only for a single-process dev server:
+  - Not persistent across server restarts
+  - Not shared across multiple uvicorn workers
+  - No atomic guarantee (acceptable since it's single-process only)
 
 Production path (Redis available):
   Sliding-window counter keyed by user_id + current minute bucket.
@@ -39,7 +34,7 @@ TIER_LIMITS: dict[UserTier, int] = {
 # ── In-memory fallback counter ─────────────────────────────────────────────
 # Keys: "{user_id}:{minute_bucket}" — the minute bucket is baked into the key
 # so stale entries from previous minutes are naturally ignored without cleanup.
-# MIGRATION NOTE: remove this dict on personal laptop (Redis handles state).
+# Kept permanently as a safety net for Redis outages, not just a dev-mode shim.
 _memory_counters: dict[str, int] = {}
 
 
@@ -125,12 +120,20 @@ async def get_redis_client() -> Optional[Redis]:
     )
     try:
         await client.ping()
-        # Redis is up — yield real client
+        redis_up = True
+    except Exception:
+        redis_up = False
+
+    if redis_up:
+        # Redis is up — yield real client. This try/finally only handles
+        # cleanup; it must NOT catch exceptions thrown in from the endpoint
+        # (e.g. a downstream HTTPException), or those get misread as a
+        # Redis failure and the generator tries to yield twice.
         try:
             yield client
         finally:
             await client.aclose()
-    except Exception:
+    else:
         # Redis is down — yield None, in-memory fallback will be used
         await client.aclose()
         yield None
