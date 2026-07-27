@@ -46,12 +46,23 @@ async def log_request(payload: TelemetryPayload) -> None:
 
         # Routing savings: what the premium model would have cost vs. what was paid.
         # When routing is disabled model_used == premium_model so savings == 0.
+        #
+        # Cache hits are a special case: no LLM was called at all, so actual
+        # cost is a true zero — NOT estimate_cost("cache", ...), which would
+        # silently fall through to the unknown-model fallback rate ($0.001/
+        # $0.002 per 1K) and understate the real savings. The premium-model
+        # cost is still computed normally, using the real token counts of the
+        # cached prompt/response (see proxy.py) — that's the dollar amount
+        # actually avoided by serving from cache instead of calling the LLM.
         premium_cost_usd = estimate_cost(
             _settings.premium_model, payload.prompt_tokens, payload.completion_tokens
         )
-        actual_cost_usd = estimate_cost(
-            payload.model_used, payload.prompt_tokens, payload.completion_tokens
-        )
+        if payload.was_cached:
+            actual_cost_usd = 0.0
+        else:
+            actual_cost_usd = estimate_cost(
+                payload.model_used, payload.prompt_tokens, payload.completion_tokens
+            )
         total_savings_usd = premium_cost_usd - actual_cost_usd
 
         async with AsyncSessionLocal() as session:

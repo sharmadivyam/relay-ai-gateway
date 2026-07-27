@@ -106,6 +106,15 @@ async def chat_completions(
 
     if cached_response is not None:
         latency_ms = (time.perf_counter() - t_start) * 1000
+
+        # Real token counts, not hardcoded zeros — this is what lets
+        # telemetry.py attribute a real dollar figure to this cache hit
+        # (what the premium model would have cost for this exact prompt/
+        # response size) instead of recording $0 saved on every cache hit.
+        enc = tiktoken.get_encoding("cl100k_base")
+        cache_prompt_tokens = len(enc.encode(prompt_text))
+        cache_completion_tokens = len(enc.encode(cached_response))
+
         background_tasks.add_task(
             log_request,
             TelemetryPayload(
@@ -114,7 +123,9 @@ async def chat_completions(
                 request_id=response_id,
                 model_requested=request.model, model_used="cache",
                 was_cached=True, was_fallback=False,
-                prompt_tokens=0, completion_tokens=0, total_tokens=0,
+                prompt_tokens=cache_prompt_tokens,
+                completion_tokens=cache_completion_tokens,
+                total_tokens=cache_prompt_tokens + cache_completion_tokens,
                 estimated_cost_usd=0.0,
                 ttft_ms=latency_ms, total_latency_ms=latency_ms,
                 input_guardrail_action="passed", output_guardrail_action="passed",
@@ -129,7 +140,11 @@ async def chat_completions(
                 message=ChatMessage(role="assistant", content=cached_response),
                 finish_reason="cache_hit",
             )],
-            usage=UsageInfo(),
+            usage=UsageInfo(
+                prompt_tokens=cache_prompt_tokens,
+                completion_tokens=cache_completion_tokens,
+                total_tokens=cache_prompt_tokens + cache_completion_tokens,
+            ),
             gateway_cached=True,
         )
 
