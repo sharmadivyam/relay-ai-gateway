@@ -1,0 +1,8 @@
+# Replace with your actual domain (Caddy needs a real domain to issue a
+# Let's Encrypt certificate — point its DNS A record at your Oracle VM's
+# public IP first). Using a bare IP address here works too, but Caddy will
+# serve plain HTTP without a trusted cert in that case.
+
+:80 {
+    reverse_proxy app:8001
+}

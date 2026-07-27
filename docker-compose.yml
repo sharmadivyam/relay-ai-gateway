@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # ── PostgreSQL ──────────────────────────────────────────────────────────
   postgres:
@@ -60,7 +58,54 @@ services:
     volumes:
       - superset_data:/app/superset_home
 
+  # ── Gateway app (FastAPI backend + built React dashboard) ──────────────
+  # Built from the repo's own Dockerfile — multi-stage: compiles frontend/
+  # then runs the backend, serving both from one container (see main.py's
+  # StaticFiles mount). Not exposed directly to the internet — Caddy in
+  # front handles TLS and is the only service with a public port.
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gateway_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # These override .env to use Docker's internal service DNS names
+      # rather than localhost, since the app now runs in the same Compose
+      # network as its dependencies instead of on the host directly.
+      DATABASE_URL: postgresql+asyncpg://gateway:gateway@postgres:5432/gateway
+      REDIS_URL: redis://redis:6379
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8001"
+
+  # ── Caddy reverse proxy — automatic HTTPS via Let's Encrypt ────────────
+  # The only service with ports exposed to the public internet.
+  caddy:
+    image: caddy:2-alpine
+    container_name: gateway_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
 volumes:
   postgres_data:
   chroma_data:
   superset_data:
+  caddy_data:
+  caddy_config:

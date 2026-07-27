@@ -1,0 +1,23 @@
+# frontend/ source IS needed now (multi-stage build compiles it in stage 1) —
+# but not the host's own local build artifacts, which would be stale/wrong
+# architecture (e.g. built on macOS, running on arm64 Linux).
+frontend/node_modules/
+frontend/dist/
+
+# Local dev artifacts — never ship these
+.venv/
+.git/
+.github/
+gateway_dev.db
+chromadb_data/
+.env
+.env.example
+
+# Not needed at container runtime
+benchmark/
+demo_seed.py
+*.md
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
