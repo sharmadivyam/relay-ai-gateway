@@ -9,6 +9,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      # requirements-ci.txt deliberately excludes sentence-transformers/torch,
+      # chromadb, llmlingua, and markitdown (multi-GB, lazily imported, never
+      # needed for pure-function unit tests). These flags must stay false here
+      # so nothing in app/tests/ accidentally triggers one of those lazy
+      # imports (e.g. guardrails_in.py's Layer 2 semantic check, or the
+      # semantic cache) — if a test needs the real behaviour, use
+      # requirements.txt (full install) in a separate, non-CI job instead of
+      # silently expanding this file.
+      ENABLE_SEMANTIC_GUARDRAILS: "false"
+      ENABLE_SEMANTIC_CACHE: "false"
+
     steps:
       - uses: actions/checkout@v4
 

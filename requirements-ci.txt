@@ -42,3 +42,6 @@ python-multipart
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
+
+ENABLE_SEMANTIC_GUARDRAILS=false
+ENABLE_SEMANTIC_CACHE=false
